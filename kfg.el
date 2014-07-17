@@ -52,6 +52,7 @@
 
 ;;; Code:
 
+(require 'cl)
 (require 'package)
 
 (defun kfg:dir-contents (dir)
