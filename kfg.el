@@ -114,10 +114,12 @@ first."
 (defun kfg-configure-modules (modules_dir configs)
   (dolist (c (kfg-enabled-modules configs))
     (let* ((module_name (cdr (assoc :module c)))
-           (config_file (kfg-join modules_dir module_name "config.el")))
+	   (config_file (kfg-join modules_dir module_name "config.el")))
       (if (file-exists-p config_file)
-          (load-file config_file)
-        (warn (format "No config.el for %s" module_name))))))
+	  (let ((profile (benchmark-run (load-file config_file))))
+	    (message "Configured %s. Profile = %s"
+		     module_name profile))
+	(warn (format "No config.el for %s" module_name))))))
 
 ;;;###autoload
 (defun kfg-initialize (root_dir)
