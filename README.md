@@ -1,4 +1,4 @@
-kfg: An extensible configuration system for emacs
+kfg: A modular configuration system for emacs
 =================================================
 
 `kfg` is a configuration system for emacs. The basic premise of `kfg`
@@ -71,8 +71,8 @@ this case, we've defined a single module, `ido`, which we'll use to
 configure the use of IDO in emacs. The first file we need to look at
 in the `ido` directory is `init.el`:
 
-  '((:enabled . t)
-    (:packages ido-vertical-mode))
+    '((:enabled . t)
+      (:packages ido-vertical-mode))
 
 The structure of a module's `init.el` is a list with two elements. The
 first element has the key `:enabled` and should map to either `t` or
@@ -94,10 +94,10 @@ processed, and after all dependencies have been installed. `config.el`
 is supposed to contain code to any module-specific initialization and
 configuration. In our example `config.el` looks like this:
 
-  (setq ido-enable-flex-matching t)
-  (ido-mode 1)
-  (ido-everywhere 1)
-  (ido-vertical-mode 1)
+    (setq ido-enable-flex-matching t)
+    (ido-mode 1)
+    (ido-everywhere 1)
+    (ido-vertical-mode 1)
 
 This is pretty straightforward and simple, which is typical for
 `config.el` files. Rather than put all configuration for all modules
