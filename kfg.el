@@ -55,10 +55,30 @@
 (require 'cl)
 (require 'package)
 
-(defun kfg-dir-contents (dir)
+;;;###autoload
+(defun kfg-activate-modules (modules)
+  "Install packages and configure all modules in MODULES. MODULES is a list of module metadata e.g. as returned by kfg--scan-metadata."
+  (package-initialize)
+  (kfg--install-packagess (kfg--find-all-packages modules))
+  (kfg--configure-modules modules))
+
+;;;###autoload
+(defun kfg-activate-module (module-dir)
+  (let ((meta (kfg--read-metadata module-dir)))
+    (kfg-activate-modules '(meta))))
+
+;;;###autoload
+(defun kfg-find-and-activate-modules (root-dir &optional filter)
+  (let ((filter (or filter 'kfg--default-filter)))
+    (kfg-activate-modules
+     (remove-if-not
+      filter
+      (kfg--scan-metadata root-dir)))))
+
+(defun kfg--dir-contents (dir)
   (remove "." (remove ".." (directory-files dir))))
 
-(defun kfg-join (&rest comps)
+(defun kfg--join (&rest comps)
   (if comps
       (let* ((rcomps (reverse comps))
              (dir-parts (mapcar 'file-name-as-directory (cdr rcomps)))
@@ -66,38 +86,33 @@
         (concat dir (car rcomps)))
     ""))
 
-(defun kfg-init-module (modules_dir module_name)
-  "Initialize the module MODULE_NAME in MODULES_DIR. Returns a
-list (NAME ENABLED (PACKAGE. . .))"
-  (let ((init_file (kfg-join modules_dir module_name "init.el")))
+(defun kfg--read-metadata (module-dir)
+  "((:module module-dir) (:metadata META-FILE-CONTENTS))"
+  (let ((init_file (kfg--join module-dir "meta.el")))
     (if (file-exists-p init_file)
         (with-temp-buffer
           (insert-file-contents init_file)
-          (cons (cons :module module_name)
-                (eval (read (buffer-string)))))
-      (progn
-        (warn (format "No init.el for %s" module_name))
-        (list (cons :module module_name) (cons :enabled nil) (list :packages))))))
+          `((:module ,module-dir)
+            (:metadata . ,(eval (read (buffer-string)))))))))
 
-(defun kfg-init-modules (modules_dir)
-  "Initialize all of the modules found in MODULES_DIR. Returns a
-list of module configs."
-  (mapcar (lambda (d) (kfg-init-module modules_dir d))
-          (kfg-dir-contents modules_dir)))
+(defun kfg--scan-metadata (modules-dir)
+  "Load metadata of all modules found in MODULES-DIR. Returns a
+list of module metadata."
+  (remove
+   nil
+   (mapcar (lambda (d) (kfg--read-metadata (kfg--join modules-dir d)))
+           (kfg--dir-contents modules-dir))))
 
-(defun kfg-enabled-modules (configs)
-  (remove-if-not (lambda (c) (cdr (assoc :enabled c))) configs))
-
-(defun kfg-find-all-packages (configs)
-  "Find all packages required by enabled modules in the list of
-module configs CONFIG. Returns the resulting set of
-packages (i.e. no duplications.)"
+(defun kfg--find-all-packages (modules)
+  "Find all packages required MODULES. Returns the resulting set
+of packages (i.e. no duplications.)"
   (delete-dups
    (apply 'append
-          (mapcar (lambda (c) (cdr (assoc :packages c)))
-                  (kfg-enabled-modules configs)))))
+          (mapcar
+           (lambda (m) (assoc-default :packages (assoc-default :metadata m)))
+           modules))))
 
-(defun kfg-install-packages (pkgs)
+(defun kfg--install-packagess (pkgs)
   "Install any packages in PKGS that are not installed. If any
 packages need to be installed, the package index is updated
 first."
@@ -111,25 +126,18 @@ first."
       (when (not (package-installed-p p))
         (package-install p)))))
 
-(defun kfg-configure-modules (modules_dir configs)
-  (dolist (c (kfg-enabled-modules configs))
-    (let* ((module_name (cdr (assoc :module c)))
-	   (config_file (kfg-join modules_dir module_name "config.el")))
-      (if (file-exists-p config_file)
-	  (let ((profile (benchmark-run (load-file config_file))))
+(defun kfg--configure-modules (modules)
+  (dolist (c modules)
+    (let* ((module-dir (cadr (assoc :module c)))
+	   (config-file (kfg--join module-dir "config.el")))
+      (if (file-exists-p config-file)
+	  (let ((profile (benchmark-run (load-file config-file))))
 	    (message "Configured %s. Profile = %s"
-		     module_name profile))
-	(warn (format "No config.el for %s" module_name))))))
+		     module-dir profile))
+	(warn (format "No config.el for %s" module-dir))))))
 
-;;;###autoload
-(defun kfg-initialize (root_dir)
-  (let* ((modules_dir (kfg-join root_dir "modules"))
-         (module_config (kfg-init-modules modules_dir))
-         (packages (kfg-find-all-packages module_config)))
-    (add-to-list 'load-path (kfg-join root_dir "elisp"))
-    (package-initialize)
-    (kfg-install-packages packages)
-    (kfg-configure-modules modules_dir module_config)))
+(defun kfg--default-filter (module)
+  (assoc-default :enabled (assoc-default :metadata module)))
 
 (provide 'kfg)
 
