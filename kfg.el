@@ -64,8 +64,11 @@
 
 ;;;###autoload
 (defun kfg-activate-module (module-dir)
+  (interactive
+   (list
+    (read-directory-name "Directory: ")))
   (let ((meta (kfg--read-metadata module-dir)))
-    (kfg-activate-modules '(meta))))
+    (kfg-activate-modules (list meta))))
 
 ;;;###autoload
 (defun kfg-find-and-activate-modules (root-dir &optional filter)
