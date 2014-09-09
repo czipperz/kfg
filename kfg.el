@@ -3,6 +3,7 @@
 ;; Author: Austin Bingham <austin.bingham@gmail.com>
 ;; Version:
 ;; URL: https://github.com/abingham/kfg
+;; Package-Requires: ((f "0.17.1"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -53,6 +54,7 @@
 ;;; Code:
 
 (require 'cl)
+(require 'f)
 (require 'package)
 
 ;;;###autoload
@@ -81,17 +83,9 @@
 (defun kfg--dir-contents (dir)
   (remove "." (remove ".." (directory-files dir))))
 
-(defun kfg--join (&rest comps)
-  (if comps
-      (let* ((rcomps (reverse comps))
-             (dir-parts (mapcar 'file-name-as-directory (cdr rcomps)))
-             (dir (apply 'concat (reverse dir-parts))))
-        (concat dir (car rcomps)))
-    ""))
-
 (defun kfg--read-metadata (module-dir)
   "((:module module-dir) (:metadata META-FILE-CONTENTS))"
-  (let ((init_file (kfg--join module-dir "meta.el")))
+  (let ((init_file (f-join module-dir "meta.el")))
     (if (file-exists-p init_file)
         (with-temp-buffer
           (insert-file-contents init_file)
@@ -103,7 +97,7 @@
 list of module metadata."
   (remove
    nil
-   (mapcar (lambda (d) (kfg--read-metadata (kfg--join modules-dir d)))
+   (mapcar (lambda (d) (kfg--read-metadata (f-join modules-dir d)))
            (kfg--dir-contents modules-dir))))
 
 (defun kfg--find-all-packages (modules)
@@ -132,7 +126,7 @@ first."
 (defun kfg--configure-modules (modules)
   (dolist (c modules)
     (let* ((module-dir (cadr (assoc :module c)))
-	   (config-file (kfg--join module-dir "config.el")))
+	   (config-file (f-join module-dir "config.el")))
       (if (file-exists-p config-file)
 	  (let ((profile (benchmark-run (load-file config-file))))
 	    (message "Configured %s. Profile = %s"
