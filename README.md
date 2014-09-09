@@ -8,35 +8,30 @@ and configuration code (i.e. code that is run when emacs starts up.)
 Modules can be defined independently and can be installed simply by
 copying a few files into a directory.
 
-Typically a `kfg` configuration will be stored in a single directory
-which we'll refer to as the *root* directory. The root directory can
-be in `~/.emacs.d`, though it doesn't need to be. A common location
-for the `kfg` root be `~/.emacs.d/kfg`, and this directory would
-contain all of the rest of the module configuration information.
+Your `kfg` modules all need to be stored in a single directory,
+typically something like `~/.emacs.d/kfg/modules`. We'll refer to this
+directory as the *root* directory. This root is commonly under
+`~/.emacs.d`, though this is not a requirement.
 
-The root directory must contain two subdirectories, `elisp` and
-`modules`. The `elisp` directory is a sort of dumping ground for
-miscellaneous emacs lisp files, and this directory is added to your
-emacs load path by `kfg`. You don't need to put anything in `elisp`,
-but it can be convenient, for example, for storing emacs lisp code
-which hasn't (yet) been bundled into a package.
+You use *root* by adding directories to it for each module that you
+want to define, and each of these module directories has a specific
+structure that tells `kfg` about its dependencies and configuration
+code. First, a module directory must contain `meta.el` which defines
+the module's *metadata*. This metadata can be an arbitrary emacs lisp
+structure, and for the most part `kfg` doesn't care about its
+contents. Rather, you use the metadata to filter and select packages
+for activation.
 
-The `modules` directory is the more interesting of the two
-subdirectories. You use `modules` be adding directories to it for each
-module that you want to define, and each of these module directories
-has a specific structure that tells `kfg` about its dependencies and
-configuration code. First, a module directory must contain `init.el`
-which tells `kfg` about the module's dependencies and whether the
-module is actually enabled (sometimes it's convenient to disable a
-module without actually deleting it from the filesystem.) Second, it
-must contains a `config.el` file which contains the emacs lisp code to
-run to configure that module. Note that the configuration code is only
-executed when a module is enabled.
+Second, a module directory must contain a `config.el` which contains
+the emacs lisp code to run to configure that module. Note that the
+configuration code is only executed when a module is enabled when you
+explicitly ask for a module to be activated.
 
-Finally, once a configuration has been defined, you use the function
-`(kfg-initialize <root directory>)` to read and process the
-configuration. This is often the only `kfg` function with which you
-need to interact.
+Once you've defined some modules, you want to activate some or all of
+them. There are a number of functions for doing this, including
+`kfg-activate-modules`, `kfg-activate-module`, and - most commonly -
+`kfg-find-and-activate-modules`. This last function is normally the
+only `kfg` function you need to use.
 
 Quickstart
 ==========
@@ -47,40 +42,34 @@ which contains configuration for the standard `ido` package. The
 directory structure looks like this:
 
     .emacs.d/kfg
-    ├── elisp
-    │   └── my_utilities.el
     └── modules
         └── ido
             ├── config.el
-            └── init.el
+            └── meta.el
 
 To "execute" this configuration you would execute the following code
 from e.g. your `.emacs`:
 
     (require 'kfg)
-    (kfg-initialize "~/.emacs.d/kfg")
+    (kfg-find-and-activate-modules "~/.emacs.d/kfg/modules")
 
-After this call, the `elisp` directory will on the emacs *load path*,
-so any emacs lisp files - like `my_utilities.el` in the example - can
-be used. `kfg` doesn't make any assumptions about or place any
-constraints on what goes in the `elisp` directory, and it's entirely
-for your own convenience.
-
-All subdirectories of `modules` are considered *modules* by `kfg`. In
-this case, we've defined a single module, `ido`, which we'll use to
-configure the use of IDO in emacs. The first file we need to look at
-in the `ido` directory is `init.el`:
+In this case, all subdirectories of `~/.emacs.d/kfg/modules` are
+considered *modules* by `kfg`. We've defined a single
+module, `ido`, which we'll use to configure the use of IDO in
+emacs. The first file we need to look at in the `ido` directory is
+`meta.el`:
 
     '((:enabled . t)
       (:packages ido-vertical-mode))
 
-The structure of a module's `init.el` is a list with two elements. The
+The structure of a module's `meta.el` is a list with two elements. The
 first element has the key `:enabled` and should map to either `t` or
-`nil` to indicate if he module is enabled or not, respectively. If a
-module is not enabled (i.e. if `init.el` contains `(:enabled . nil)`)
-then the module is not processed any further.
+`nil` to indicate if he module is enabled or not, respectively. By
+default, `kfg-find-and-activate-modules` will look for this `:enabled`
+flag and use it to determine if a module is enabled. You can change
+this behavior by specifying a different filter function, however.
 
-The second entry in the `init.el` list is a list starting with the
+The second entry in the `meta.el` list is a list starting with the
 keywords `:packages`. All elements in the list after `:packages` are
 treated as package dependencies for the module and will be installed
 by `kfg` if needed. So in this example we've said that our `ido`
@@ -88,8 +77,12 @@ module depends on the `ido-vertical-mode` package. Note that this only
 expresses a dependency; `kfg` will not automatically `require` or
 otherwise use module dependencies. That's up to you.
 
+Note that `:packages` is the only metadata entry that `kfg` ever pays
+attention to directly. If `:packages` is missing, then `kfg` assumes
+that a module has no package dependencies.
+
 The other mandatory file in a module is `config.el`. This file is
-executed after all `init.el` files for all modules have been
+executed after all `meta.el` files for all modules have been
 processed, and after all dependencies have been installed. `config.el`
 is supposed to contain code to any module-specific initialization and
 configuration. In our example `config.el` looks like this:
@@ -109,6 +102,16 @@ In this configuration note that `config.el` calls `(ido-vertical-mode
 `init.el`. Since `kfg` promises to install all dependent packages
 prior to executing any `config.el` files, the configuration can be
 sure that it will be able to call this function.
+
+To activate this module (and any others in the same directory) use:
+
+    (kfg-find-and-activate-modules "~/.emacs.d/kfg/modules")
+
+This will scan the "modules" directory for modules, reading each
+`meta.el` in turn. It will then filter the modules based on their
+metadata using the `filter` argument. For each module that passes the
+filter, its packages will be installed, and then all of the
+`config.el` files will be executed.
 
 That's really all there is to `kfg`. You can add as many modules as
 you want, and the configurations can be as complex as you need. You
